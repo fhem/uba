@@ -738,9 +738,8 @@ sub GetUpdateUBA($) {
       callback => \&ParseUBA
     });
 
+    Log3 ($name, 3, "Getting $pollutant data from URL: $url");
   }
-
-  Log3 ($name, 3, "Getting $pollutant data from URL: $url");
 }
 
 sub ParseUBA($$$)
