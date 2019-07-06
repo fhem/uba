@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-module_file="FHEM/60_uba.pm"
+module_file="FHEM/60_MoWaS.pm"
 commandref_de_source="CommandRef.de.md"
 commandref_en_source="CommandRef.en.md"
 meta_source="meta.json"
-name="uba"
-controls_file="controls_uba.txt"
+name="bfs"
+controls_file="controls_MoWaS.txt"
 changed_file="CHANGED"
 
 #   +------------------------------------------------------------
@@ -64,6 +64,7 @@ update_changed() {
 }
 
 substitute
+create_controlfile
 #add_hooks
 # only create new controls file if FHEM/* is changed
 test "$(git diff --cached --name-only --diff-filter=ACM | grep -c 'FHEM/')" -gt 0 && create_controlfile
