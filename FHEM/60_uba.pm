@@ -7,7 +7,6 @@
 #  2019 Florian Asche <fhem@florian-asche.de>
 #
 #  This module provides air quality data from UBA stations
-#  and ambient dose rate data from BfS stations
 #
 #  http://www.umweltbundesamt.de/daten/luftbelastung/aktuelle-luftdaten#/stations
 #
