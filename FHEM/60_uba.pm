@@ -16,16 +16,127 @@
 #
 ##############################################################################
 
-package main;
+package FHEM::uba;
 
 use strict;
 use warnings;
 use Time::Local;
 use POSIX qw( strftime );
-use JSON;
 use Data::Dumper; #debugging
 use Encode qw(encode_utf8);
+use FHEM::Meta;
+use GPUtils qw(GP_Import GP_Export);
 
+# try to use JSON::MaybeXS wrapper
+#   for chance of better performance + open code
+eval {
+    require JSON::MaybeXS;
+    import JSON::MaybeXS qw( decode_json encode_json );
+    1;
+};
+
+if ($@) {
+    $@ = undef;
+
+    # try to use JSON wrapper
+    #   for chance of better performance
+    eval {
+
+        # JSON preference order
+        local $ENV{PERL_JSON_BACKEND} =
+          'Cpanel::JSON::XS,JSON::XS,JSON::PP,JSON::backportPP'
+          unless ( defined( $ENV{PERL_JSON_BACKEND} ) );
+
+        require JSON;
+        import JSON qw( decode_json encode_json );
+        1;
+    };
+
+    if ($@) {
+        $@ = undef;
+
+        # In rare cases, Cpanel::JSON::XS may
+        #   be installed but JSON|JSON::MaybeXS not ...
+        eval {
+            require Cpanel::JSON::XS;
+            import Cpanel::JSON::XS qw(decode_json encode_json);
+            1;
+        };
+
+        if ($@) {
+            $@ = undef;
+
+            # In rare cases, JSON::XS may
+            #   be installed but JSON not ...
+            eval {
+                require JSON::XS;
+                import JSON::XS qw(decode_json encode_json);
+                1;
+            };
+
+            if ($@) {
+                $@ = undef;
+
+                # Fallback to built-in JSON which SHOULD
+                #   be available since 5.014 ...
+                eval {
+                    require JSON::PP;
+                    import JSON::PP qw(decode_json encode_json);
+                    1;
+                };
+
+                if ($@) {
+                    $@ = undef;
+
+                    # Fallback to JSON::backportPP in really rare cases
+                    require JSON::backportPP;
+                    import JSON::backportPP qw(decode_json encode_json);
+                    1;
+                }
+            }
+        }
+    }
+}
+
+## Import der FHEM Funktionen
+#-- Run before package compilation
+BEGIN {
+
+    # Import from main context
+    GP_Import(
+        qw(
+          readingsSingleUpdate
+          readingsBulkUpdate
+          readingsBulkUpdateIfChanged
+          readingsBeginUpdate
+          readingsEndUpdate
+          defs
+          Log3
+          CommandAttr
+          attr
+          readingFnAttributes
+          AttrVal
+          ReadingsVal
+          FmtDateTime
+          IsDisabled
+          deviceEvents
+          init_done
+          HttpUtils_NonblockingGet
+          gettimeofday
+          InternalTimer
+          RemoveInternalTimer
+          ReplaceEventMap)
+    );
+}
+
+#-- Export to main context with different name
+GP_Export(
+    qw(
+      Initialize
+      GetUpdate
+      GetUpdateUBA
+      )
+);
 
 my %station_names = (  
   'DEBB007' => 'Elsterwerda',
@@ -490,16 +601,17 @@ my %station_names = (
 ##############################################################################
 
 
-sub uba_Initialize($) {
+sub Initialize($) {
   my ($hash) = @_;
   my $name = $hash->{NAME};
 
-  $hash->{DefFn}        = "uba_Define";
-  $hash->{UndefFn}      = "uba_Undefine";
-  $hash->{GetFn}        = "uba_Get";
-  $hash->{AttrFn}       = "uba_Attr";
-  $hash->{DbLog_splitFn}= "uba_DbLog_splitFn";
-  $hash->{AttrList}     = "disable:0,1 ".
+  $hash->{DefFn}        = "FHEM::uba::Define";
+  $hash->{UndefFn}      = "FHEM::uba::Undefine";
+  $hash->{GetFn}        = "FHEM::uba::Get";
+  $hash->{AttrFn}       = "FHEM::uba::Attr";
+  $hash->{NotifyFn}     = "FHEM::uba::Notify";
+  $hash->{DbLog_splitFn}= "FHEM::uba::DbLog_splitFn";
+  $hash->{AttrList}     = "FHEM::uba::disable:0,1 ".
                           "pollutants ".
                           "stationPM10 ".
                           "stationSO2 ".
@@ -510,7 +622,7 @@ sub uba_Initialize($) {
                           $readingFnAttributes;
 }
 
-sub uba_Define($$$) {
+sub Define($$$) {
   my ($hash, $def) = @_;
   my @a = split("[ \t][ \t]*", $def);
   my ($found, $dummy);
@@ -521,26 +633,45 @@ sub uba_Define($$$) {
   $hash->{helper}{STATION} = $a[2];
   $hash->{helper}{INTERVAL} = 3600;
   $hash->{POLLUTION} = $station_names{$a[2]};
-  $attr{$name}{stateFormat} = "PM10 µg/m³" if( !defined($attr{$name}{stateFormat}));
-  $attr{$name}{pollutants} = "CO,NO2,O3,PM10,SO2" if( !defined($attr{$name}{pollutants}));
+  $hash->{NOTIFYDEV}      = "global,$name";
 
-  InternalTimer( gettimeofday() + 60, "uba_GetUpdate", $hash, 0);
+  CommandAttr(undef,$name . ' stateFormat PM10 µg/m³') if (AttrVal($name,'stateFormat','none') eq 'none');
+  CommandAttr(undef,$name . ' pollutants CO,NO2,O3,PM10,SO2') if (AttrVal($name,'pollutants','none') eq 'none');
 
+  InternalTimer( gettimeofday() + 60, "uba_GetUpdate", $hash);
 
-  #$hash->{STATE} = "Initialized";
+  readingsSingleUpdate($hash,'state','Initialized',1);
 
   return undef;
 }
 
-sub uba_Undefine($$) {
+sub Undefine($$) {
   my ($hash, $arg) = @_;
   my $name = $hash->{NAME};
   RemoveInternalTimer($hash);
   return undef;
 }
 
+sub Notify($$) {
 
-sub uba_Get($@) {
+    my ($hash,$dev) = @_;
+    my $name = $hash->{NAME};
+    return if (IsDisabled($name));
+    
+    my $devname = $dev->{NAME};
+    my $devtype = $dev->{TYPE};
+    my $events = deviceEvents($dev,1);
+    return if (!$events);
+
+
+    GetUpdate($hash) if( grep /^INITIALIZED$/,@{$events}
+                                                or grep /^DELETEATTR.$name.disable$/,@{$events}
+                                                or grep /^DELETEATTR.$name.interval$/,@{$events}
+                                                or (grep /^DEFINED.$name$/,@{$events} and $init_done) );
+    return;
+}
+
+sub Get($@) {
   my ($hash, @a) = @_;
   my $command = $a[1];
   my $parameter = $a[2] if(defined($a[2]));
@@ -550,35 +681,32 @@ sub uba_Get($@) {
   my $usage = "Unknown argument $command, choose one of data:noArg";
 
   return $usage if $command eq '?';
-  
-  RemoveInternalTimer($hash);
 
-  if(AttrVal($name, "disable", 0) eq 1) {
-    $hash->{STATE} = "disabled";
-    return "uba $name is disabled. Aborting...";
+  if ( lc($command) eq 'data' ) {
+      GetUpdate($hash);
   }
-  uba_GetUpdate($hash);
 
   return undef;
 }
 
 
-sub uba_GetUpdate($) {
+sub GetUpdate($) {
   my ($hash) = @_;
   my $name = $hash->{NAME};
 
-  if(AttrVal($name, "disable", 0) eq 1) {
-    $hash->{STATE} = "disabled";
+  if(IsDisabled($name)) {
+    readingsSingleUpdate($hash,'state','disabled',1);
     Log3 ($name, 2, "uba $name is disabled, data update cancelled.");
+    RemoveInternalTimer($hash);
     return undef;
   }
 
   RemoveInternalTimer($hash);
-  uba_GetUpdateUBA($hash);  
+  GetUpdateUBA($hash);  
   return undef;
 }
 
-sub uba_GetUpdateUBA($) {
+sub GetUpdateUBA($) {
   my ($hash) = @_;
   my $name = $hash->{NAME};
 
@@ -588,9 +716,8 @@ sub uba_GetUpdateUBA($) {
   my $enddate = int($lastupdate+(24*60*60));
   
 
-  my ($pollutant,$station,$scope,$url) = "";
+  my ($pollutant,$station,$scope,$url);
   my @pollutants = split( ',', AttrVal($name,"pollutants","CO,NO2,O3,PM10,SO2") );
-
 
   foreach $pollutant (@pollutants) {
     $lastupdate = ReadingsVal( $name, ".lastUpdate".$pollutant, int($now-(24*60*60)-(strftime("%M",localtime($now))*60)-(strftime("%S",localtime($now)))) );
@@ -599,7 +726,6 @@ sub uba_GetUpdateUBA($) {
     $scope = ($pollutant eq "CO") ? "8SMW" : "1SMW";
     $station = AttrVal($name,"station".$pollutant,$hash->{helper}{STATION});
     $url="http://www.umweltbundesamt.de/js/uaq/data/stations/measuring?pollutant[]=$pollutant&scope[]=$scope&station[]=$station&group[]=pollutant&range[]=".($lastupdate+1800).",$enddate";
-    Log3 ($name, 3, "Getting $pollutant data from URL: $url");
 
     HttpUtils_NonblockingGet({
       url => $url,
@@ -608,14 +734,14 @@ sub uba_GetUpdateUBA($) {
       hash => $hash,
       type => $pollutant,
       range => $lastupdate,
-      callback => \&uba_ParseUBA,
+      callback => \&ParseUBA
     });
 
+    Log3 ($name, 3, "Getting $pollutant data from URL: $url");
   }
-  return undef;
 }
 
-sub uba_ParseUBA($$$)
+sub ParseUBA($$$)
 {
   my ($param, $err, $data) = @_;
   my $hash = $param->{hash};
@@ -624,14 +750,14 @@ sub uba_ParseUBA($$$)
   if( $err )
   {
     Log3 $name, 1, "$name: URL error for ".$param->{type}." from ".$param->{range}.": ".$err;
-    if($hash->{STATE} ne "error"){
+    if(ReadingsVal($name,'state','error') ne "error"){
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
     } else {
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
     }
-    $hash->{STATE} = "error";
+    readingsSingleUpdate($hash,'state','error',1);
     return undef;
   }
   elsif( $data eq "" ){
@@ -644,30 +770,37 @@ sub uba_ParseUBA($$$)
   elsif( $data !~ m/^{.*}$/ ){
     Log3 $name, 2, "$name: JSON error for UBA (".$param->{type}." from ".$param->{range}.")";
     my $nextupdate = int(gettimeofday())+600;
-    if($hash->{STATE} ne "error"){
+    if(ReadingsVal($name,'state','error') ne "error"){
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
     } else {
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
     }
-    $hash->{STATE} = "error";
+    readingsSingleUpdate($hash,'state','error',1);
     return undef;  
   }
+  
+  WriteReadings($hash,$data,$param);
+}
 
+sub WriteReadings($@) {
+  my ($hash,$data,$param)    = @_;
+  
+  my $name = $hash->{NAME};
   my $json = eval { JSON->new->utf8(0)->decode($data) };
   if($@)
   {
     Log3 $name, 2, "$name: JSON evaluation error for UBA (".$param->{type}." from ".$param->{range}.") ".$@;
  
-    if($hash->{STATE} ne "error"){
+    if(ReadingsVal($name,'state','error') ne "error"){
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
     } else {
       RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash, 1);
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
     }
-    $hash->{STATE} = "error";
+    readingsSingleUpdate($hash,'state','error',1);
     return undef;  
   }
 
@@ -710,12 +843,12 @@ sub uba_ParseUBA($$$)
 
   my $nextupdate = gettimeofday()+$hash->{helper}{INTERVAL};
   RemoveInternalTimer($hash, "uba_GetUpdate");
-  InternalTimer($nextupdate, "uba_GetUpdate", $hash, 1);
+  InternalTimer($nextupdate, "uba_GetUpdate", $hash);
 
   return undef;
 }
 
-sub uba_Attr(@)
+sub Attr(@)
 {
   my ($cmd, $device, $attribName, $attribVal) = @_;
   my $hash = $defs{$device};
@@ -724,13 +857,13 @@ sub uba_Attr(@)
 
   if($cmd eq "set" && $attribName eq "userPassODL")
   {
-    $attr{$device}{"userPassODL"} = uba_encrypt($attribVal);
+    CommandAttr( undef,$hash->{NAME} . ' userPassODL ' . encrypt($attribVal) )
   }
   
   return undef;
 }
 
-sub uba_DbLog_splitFn($) {
+sub DbLog_splitFn($) {
   my ($event) = @_;
   my ($reading, $value, $unit) = "";
 
@@ -847,4 +980,49 @@ sub uba_DbLog_splitFn($) {
 </ul>
 
 =end html
+
+=for :application/json;q=META.json 60_uba.pm
+{
+  "abstract": "Air quality data for Germany, provided by UBA",
+  "x_lang": {
+    "de": {
+      "abstract": "Daten zur Luftqualität in Deutschland, geliefert vom UBA"
+    }
+  },
+  "keywords": [
+    "fhem-mod-device",
+    "fhem-3rd-part",
+    "Air quality",
+    "UBS"
+  ],
+  "release_status": "unstable",
+  "license": "GPL_2",
+  "author": [
+    "Florian Asche <fhem@florian-asche.de>"
+  ],
+  "x_fhem_maintainer": [
+    "Florian_GT"
+  ],
+  "x_fhem_maintainer_github": [
+    "florian-asche"
+  ],
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "FHEM": 5.00918799,
+        "perl": 5.016, 
+        "Meta": 0,
+        "JSON": 0,
+        "HttpUtils": 0,
+        "Encode": 0
+      },
+      "recommends": {
+      },
+      "suggests": {
+      }
+    }
+  }
+}
+=end :application/json;q=META.json
+
 =cut
