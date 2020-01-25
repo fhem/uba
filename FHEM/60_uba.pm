@@ -223,6 +223,7 @@ sub Notify($$) {
     GetUpdate($hash) if( grep /^INITIALIZED$/,@{$events}
                                                 or grep /^DELETEATTR.$name.disable$/,@{$events}
                                                 or grep /^DELETEATTR.$name.interval$/,@{$events}
+                                                or grep /^MODIFIED.$name$/,@{$events}
                                                 or (grep /^DEFINED.$name$/,@{$events} and $init_done) );
     return;
 }
