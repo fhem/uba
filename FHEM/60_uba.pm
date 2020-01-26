@@ -311,11 +311,11 @@ sub ParseUBA($$$)
   {
     Log3 $name, 1, "$name: URL error: ".$err;
     if(ReadingsVal($name,'state','error') ne "error"){
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdate", $hash);
     } else {
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdate", $hash);
     }
     readingsSingleUpdate($hash,'state','error',1);
     return undef;
@@ -323,11 +323,11 @@ sub ParseUBA($$$)
   elsif (!defined($data) || length($data) == 0 || $data eq "") {
     Log3 $name, 2, "$name: no data retrieved from UBA";
     if(ReadingsVal($name,'state','error') ne "error"){
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdate", $hash);
     } else {
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdate", $hash);
     }
     readingsSingleUpdate($hash,'state','error',1);
     return undef;
@@ -337,11 +337,11 @@ sub ParseUBA($$$)
     Log3 $name, 2, "$name: data for UBA: ".$data;
 
     if(ReadingsVal($name,'state','error') ne "error"){
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdate", $hash);
     } else {
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdate", $hash);
     }
     readingsSingleUpdate($hash,'state','error',1);
     return undef;
@@ -366,11 +366,11 @@ sub WriteReadings($@) {
     Log3 $name, 2, "$name: JSON evaluation error for UBA (".$param->{type}." from ".$param->{range}.") ".$@;
  
     if(ReadingsVal($name,'state','error') ne "error"){
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+600), "uba_GetUpdate", $hash);
     } else {
-      RemoveInternalTimer($hash, "uba_GetUpdateUBA");
-      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdateUBA", $hash);
+      RemoveInternalTimer($hash, "uba_GetUpdate");
+      InternalTimer(int(gettimeofday()+3600), "uba_GetUpdate", $hash);
     }
     readingsSingleUpdate($hash,'state','error',1);
     return undef;  
