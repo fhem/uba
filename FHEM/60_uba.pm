@@ -491,11 +491,6 @@ sub Attr(@)
   my $hash = $defs{$device};
 
   $attribVal = "" if (!defined($attribVal));
-
-  if($cmd eq "set" && $attribName eq "userPassODL")
-  {
-    CommandAttr( undef,$hash->{NAME} . ' userPassODL ' . encrypt($attribVal) )
-  }
   
   return undef;
 }
