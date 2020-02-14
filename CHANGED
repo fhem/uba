@@ -1,7 +1,7 @@
-Last uba updates (28.01.2020)
+Last uba updates (14.02.2020)
 
+  56dbf5c 28.01.2020 01:53 cleanup layout
+  723a121 28.01.2020 00:39 removed unneeded code
   c3089be 27.01.2020 00:22 Fixed internal timer.
   2a9b85d 25.01.2020 13:51 Add functionality: Update data if you edit your device.
   8a5b56a 25.01.2020 00:33 change to refactored version for new UBA API
-  d7d24c3 17.11.2019 14:02 Merge pull request #2 from fhem/patch-CoolTux
-  1056ee0 26.07.2019 21:22 fixed head
