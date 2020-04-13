@@ -173,7 +173,8 @@ sub Initialize($) {
   $hash->{AttrFn}       = "FHEM::uba::Attr";
   $hash->{NotifyFn}     = "FHEM::uba::Notify";
   $hash->{DbLog_splitFn}= "FHEM::uba::DbLog_splitFn";
-  $hash->{AttrList}     = "FHEM::uba::disable:0,1 ".
+
+  $hash->{AttrList}     = "disable:0,1 ".
                           "daysToImport ".
                           "showTimeReadings:0,1 ".
                           $readingFnAttributes;
