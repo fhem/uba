@@ -437,13 +437,16 @@ sub WriteReadings($@) {
     readingsBeginUpdate($hash);
 
     # Set specific reading time from dataset
-    $hash->{CHANGETIME}[0] = FmtDateTime($measured_datetime_timestamp);
     $hash->{".updateTimestamp"} = FmtDateTime($measured_datetime_timestamp);
+    my $changeindex = 0;
 
     # Save Luftqualitätsindex
     readingsBulkUpdateIfChanged($hash,"luftqualitaetsindex",$json->{"data"}->{$station}->{$datetimekey}[1]);
+    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($measured_datetime_timestamp);
+
     # Save Luftqualitätsindex_name
     readingsBulkUpdateIfChanged($hash,"luftqualitaetsindex_name",$airquality{$json->{"data"}->{$station}->{$datetimekey}[1]});
+    $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($measured_datetime_timestamp);
   
     # Search and work on each specific available dataset
     my $dataset_size = @{$json->{"data"}->{$station}->{$datetimekey}};
@@ -456,6 +459,7 @@ sub WriteReadings($@) {
 
       # Save Datasets
       readingsBulkUpdateIfChanged($hash, $components{$json->{"data"}->{$station}->{$datetimekey}[$i][0]}, $json->{"data"}->{$station}->{$datetimekey}[$i][1]);
+      $hash->{CHANGETIME}[$changeindex++] = FmtDateTime($measured_datetime_timestamp);
     }
 
     # Updaten der .lastUpdate
