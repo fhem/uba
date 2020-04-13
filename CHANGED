@@ -1,7 +1,7 @@
-Last uba updates (13.04.2020)
+Last uba updates (14.04.2020)
 
+  7b6afd3 14.04.2020 01:17 added correct changetime, but still not working like expected
+  c03d810 13.04.2020 23:41 fixed AttrList bug: See #7
   613c3e6 13.04.2020 20:38 changed update usage to readingsBulkUpdate
   56dbf5c 28.01.2020 01:53 cleanup layout
   723a121 28.01.2020 00:39 removed unneeded code
-  c3089be 27.01.2020 00:22 Fixed internal timer.
-  2a9b85d 25.01.2020 13:51 Add functionality: Update data if you edit your device.
