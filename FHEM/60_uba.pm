@@ -432,20 +432,19 @@ sub WriteReadings($@) {
       next;
     }
 
+    # Start data update
+    readingsBeginUpdate($hash);
+
+    # Set specific reading time from dataset
+    $hash->{CHANGETIME}[0] = FmtDateTime($measured_datetime_timestamp);
+    $hash->{".updateTimestamp"} = FmtDateTime($measured_datetime_timestamp);
+
     # Save Luftqualitätsindex
-    readingsBeginUpdate($hash);
-    $hash->{".updateTimestamp"} = FmtDateTime($measured_datetime_timestamp);
-    readingsBulkUpdate( $hash, "luftqualitaetsindex", $json->{"data"}->{$station}->{$datetimekey}[1] );
-    $hash->{CHANGETIME}[0] = FmtDateTime($measured_datetime_timestamp);
-    readingsEndUpdate($hash,1);
-
+    readingsBulkUpdateIfChanged($hash,"luftqualitaetsindex",$json->{"data"}->{$station}->{$datetimekey}[1]);
     # Save Luftqualitätsindex_name
-    readingsBeginUpdate($hash);
-    $hash->{".updateTimestamp"} = FmtDateTime($measured_datetime_timestamp);
-    readingsBulkUpdate( $hash, "luftqualitaetsindex_name", $airquality{$json->{"data"}->{$station}->{$datetimekey}[1]} );
-    $hash->{CHANGETIME}[0] = FmtDateTime($measured_datetime_timestamp);
-    readingsEndUpdate($hash,1);
-
+    readingsBulkUpdateIfChanged($hash,"luftqualitaetsindex_name",$airquality{$json->{"data"}->{$station}->{$datetimekey}[1]});
+  
+    # Search and work on each specific available dataset
     my $dataset_size = @{$json->{"data"}->{$station}->{$datetimekey}};
     Log3 $name, 5, "x dataset_size: $dataset_size";
     for ( my $i = 3; $i < $dataset_size; $i++ ) {
@@ -455,20 +454,19 @@ sub WriteReadings($@) {
       Log3 $name, 4, "--$i 1 data: ".$json->{"data"}->{$station}->{$datetimekey}[$i][1];
 
       # Save Datasets
-      readingsBeginUpdate($hash);
-      $hash->{".updateTimestamp"} = FmtDateTime($measured_datetime_timestamp);
-      readingsBulkUpdate( $hash, $components{$json->{"data"}->{$station}->{$datetimekey}[$i][0]}, $json->{"data"}->{$station}->{$datetimekey}[$i][1] );
-      $hash->{CHANGETIME}[0] = FmtDateTime($measured_datetime_timestamp);
-      readingsEndUpdate($hash,1);
+      readingsBulkUpdateIfChanged($hash, $components{$json->{"data"}->{$station}->{$datetimekey}[$i][0]}, $json->{"data"}->{$station}->{$datetimekey}[$i][1]);
     }
 
     # Updaten der .lastUpdate
     if( $measured_datetime_timestamp > $lastupdate_timestamp ){
       # Er soll nur den höchsten Wert schreiben
       Log3 $name, 4, "Writing new lastUpdate ($measured_datetime_timestamp)";
-      readingsSingleUpdate( $hash, ".lastUpdate", $measured_datetime_timestamp, 0 );
-      readingsSingleUpdate( $hash, "lastUpdate", FmtDateTime($measured_datetime_timestamp), 0 ) if(AttrVal($name, "showTimeReadings", 0) eq 1);
+      readingsBulkUpdateIfChanged($hash,".lastUpdate",$measured_datetime_timestamp, 0);
+      readingsBulkUpdateIfChanged($hash,"lastUpdate",FmtDateTime($measured_datetime_timestamp), 0) if(AttrVal($name, "showTimeReadings", 0) eq 1);
     }
+
+    # End data update
+    readingsEndUpdate($hash, 1);
   }
   
   # Set timer
@@ -620,7 +618,7 @@ sub DbLog_splitFn($) {
   "release_status": "unstable",
   "license": "GPL_2",
   "author": [
-    "Florian Asche <fhem@florian-asche.de>"
+    "Florian Asche <fhemDevelopment@florian-asche.de>"
   ],
   "x_fhem_maintainer": [
     "Florian_GT"
