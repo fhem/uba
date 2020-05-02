@@ -617,7 +617,8 @@ sub DbLog_splitFn($) {
   "keywords": [
     "fhem-mod-device",
     "fhem-3rd-part",
-    "Air quality",
+    "Air Quality",
+    "UmweltBundesAmt",
     "UBA"
   ],
   "release_status": "unstable",
@@ -635,7 +636,7 @@ sub DbLog_splitFn($) {
     "runtime": {
       "requires": {
         "FHEM": 5.00918799,
-        "perl": 5.016, 
+        "perl": 5.20.2, 
         "Meta": 0,
         "JSON": 0,
         "HttpUtils": 0,
